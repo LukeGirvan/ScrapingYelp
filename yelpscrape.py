@@ -6,12 +6,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 # Constants
-BASE_URL = 'https://www.yelp.com/search?find_desc=Restaurants&find_loc=Belfast'
+BASE_URL = 'https://www.yelp.com/search?find_desc=Restaurants&find_loc=Madrid%2C+Spain'
 COOKIE_NOTIFICATION_XPATH = '//*[@id="onetrust-reject-all-handler"]'
-NEXT_BUTTON_XPATH = '//*[@id="main-content"]/div/ul/li[13]/div/div[1]/div/div[11]/span/a'
 MAX_PAGES = 10
 
-def close_cookie_notification(driver):
+def close_cookie_notification(driver, COOKIE_NOTIFICATION_XPATH):
     try:
         cookie_notification = WebDriverWait(driver, 10).until(
             EC.presence_of_element_located((By.XPATH, COOKIE_NOTIFICATION_XPATH))
@@ -21,36 +20,51 @@ def close_cookie_notification(driver):
     except Exception as e:
         print(f"Error handling cookie notification: {str(e)}")
 
-def scrape_restaurants(driver):
+def scrape_restaurants(driver, is_sponsored):
     top_10_restaurants = []
 
+    if is_sponsored:
+        NEXT_BUTTON_XPATH = '//*[@id="main-content"]/div/ul/li[21]/div/div[1]/div/div[11]/span/a'
+    else:
+        NEXT_BUTTON_XPATH = '//*[@id="main-content"]/div/ul/li[13]/div/div[1]/div/div[11]/span/a'
+
     for page in range(1, MAX_PAGES + 1):
-        for i in range(3, 13):
+        for i in range(8 if is_sponsored else 3, 18 if is_sponsored else 13):
             restaurant = {}
-            restaurant['name'] = driver.find_element(By.XPATH, f'//*[@id="main-content"]/div/ul/li[{i}]/div/div/div/div[2]/div[1]/div[1]/div[1]/div/div/h3/span/a').text
+            restaurant['name'] = driver.find_element(By.XPATH, f'//*[@id="main-content"]/div/ul/li[{i}]/div[1]/div/div/div[2]/div[1]/div[1]/div[1]/div/div/h3/span/a').text
             restaurant['review'] = driver.find_element(By.XPATH, f'//*[@id="main-content"]/div/ul/li[{i}]/div[1]/div/div/div[2]/div[1]/div[1]/div[2]/div/div/div').text
             restaurant['img'] = driver.find_element(By.XPATH, f'//*[@id="main-content"]/div/ul/li[{i}]/div[1]/div/div/div[1]/div/div/div/div/div/div/div[1]/div/a/img').get_attribute('src')
             top_10_restaurants.append(restaurant)
 
         # Click the "Next" button to go to the next page
-        next_button = driver.find_element(By.XPATH, NEXT_BUTTON_XPATH)
-        next_button.click()
+        try:
+            next_button = driver.find_element(By.XPATH, NEXT_BUTTON_XPATH)
+            next_button.click()
+            print("Clicked on the 'Next' button successfully.")
+        except Exception as e:
+            print(f"Error clicking on the 'Next' button: {str(e)}")
 
         # Wait for a random time (to mimic human behavior)
         time.sleep(random.uniform(2, 5))
 
     return top_10_restaurants
 
+def is_sponsor(driver):
+    try:
+        sponsored_results = driver.find_element(By.XPATH, "//*[contains(@class, 'css-agyoef') and contains(text(), 'Sponsored Results')]")
+        return True
+    except Exception as e:
+        return False
+
 def main():
     driver = webdriver.Chrome()
     driver.get(BASE_URL)
 
-    # Close or dismiss the cookie notification
-    close_cookie_notification(driver)
+    close_cookie_notification(driver, COOKIE_NOTIFICATION_XPATH)
+    is_sponsored = is_sponsor(driver)
 
-    top_10_restaurants = scrape_restaurants(driver)
+    top_10_restaurants = scrape_restaurants(driver, is_sponsored)
 
-    # Print or process the scraped restaurant information
     for restaurant in top_10_restaurants:
         print(f"Name: {restaurant['name']}")
         print(f"Review: {restaurant['review']}")
